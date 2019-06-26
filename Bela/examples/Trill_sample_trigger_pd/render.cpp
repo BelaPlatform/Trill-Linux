@@ -11,39 +11,15 @@
 extern "C" {
 #include <libpd/s_stuff.h>
 };
-#include <libraries/UdpServer/UdpServer.h>
-#include <libraries/Midi/Midi.h>
-#include <libraries/Scope/Scope.h>
+#include <UdpServer.h>
+#include <Midi.h>
+#include <Scope.h>
 #include <string>
 #include <sstream>
 #include <algorithm>
 // MODIFICATION START
 #include <Trill.h>
 Trill touchSensor;
-
-#include <Gui.h>
-
-Gui myGui;
-
-float gPrintInterval = 1;
-float gSendInterval = 0.04;
-
-int speedOpts[4] = {0, 1, 2, 3};
-int prescalerOpts[6] = {1, 2, 4, 8, 16, 32};
-int thresholdOpts[7] = {0, 10, 20, 30, 40, 50, 60};
-int bitResolution = 12;
-
-std::vector<int> vect0 (15); 
-std::vector<int> vect1 (15); 
-std::vector<float> vect2 (1);  
-std::vector<double> vect3 {0.0};
-
-int xAxis[15] = {0};
-int yAxis[15] = {0};
-float xPosition = 0;
-
-
-
 // how often to try to read the
 // cap sensors inputs. The cap sensor values are always sent to Pd once
 // per block, regardless.
@@ -57,12 +33,6 @@ void readCapSensorLoop(void*)
 			//for(unsigned int i = 0; i < sizeof(touchSensor.rawData)/sizeof(int); i++)
 				//printf("%5d ", touchSensor.rawData[i]);
 		}
-
-		for(unsigned int i = 0; i < 15; i++) {
-			xAxis[i] = touchSensor.rawData[i];
-			yAxis[i] = touchSensor.rawData[i+15];
-		}	
-
 		usleep(touchSensorSleepIntervalUs);
 	}
 }
@@ -514,7 +484,6 @@ bool setup(BelaContext *context, void *userData)
 // MODIFICATION START
 	touchSensor.setup();
 	Bela_scheduleAuxiliaryTask(Bela_createAuxiliaryTask(readCapSensorLoop, 50, "touchSensorRead", NULL));
-	myGui.setup(5556, "gui");
 // MODIFICATION END
 	return true;
 }
@@ -522,42 +491,13 @@ bool setup(BelaContext *context, void *userData)
 void render(BelaContext *context, void *userData)
 {
 // MODIFICATION START
-	static unsigned int bufferCount = 0;
-
 	libpd_start_message(touchSensor.numSensors);
 	for(unsigned int n = 0; n < touchSensor.numSensors; ++n)
 	{
-		// libpd_add_float(touchSensor.rawData[n]/(4096.f));
-		libpd_add_float(touchSensor.rawData[n]);
+		libpd_add_float(touchSensor.rawData[n]/(4096.f));
+		// libpd_add_float(touchSensor.rawData[n]);
 	}
 	libpd_finish_message("bela_Trill", "list");
-	
-	for(unsigned int n = 0; n < context->audioFrames; n++) {
-			
-		xPosition = 0;
-
-		for(unsigned int i = 0; i < 15; i++) {
-			vect0[i] = xAxis[i]/100;
-			xPosition += xAxis[i]*(i+1);
-			vect1[i] = yAxis[i]/100;
-		}
-		
-		float average = xPosition/15;
-		vect2[0] = average;
-		
-		if (bufferCount >= gSendInterval*context->audioSampleRate)
-		{
-			myGui.sendBuffer(0, vect0);
-			myGui.sendBuffer(1, vect1);
-			myGui.sendBuffer(2, vect2);
-			myGui.sendBuffer(3, vect3);
-
-			bufferCount = 0;
-		}
-		bufferCount++;
-	}
-
-	
 //MODIFICATION END
 	int num;
 #ifdef PARSE_MIDI
