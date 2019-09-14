@@ -3,7 +3,7 @@
 // from raw values. Really this should be done the right way
 // by getting it from the sensor itself in the appropriate mode.
 
-#include <Trill.h>
+#include "Trill.h"
 
 #define MAX_TOUCHES 	3
 
