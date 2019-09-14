@@ -1,5 +1,5 @@
 #include <Bela.h>
-#include <Trill.h>
+#include <libraries/Trill/Trill.h>
 
 Trill touchSensor;
 
@@ -12,12 +12,11 @@ void loop(void*)
 {
 	while(!gShouldStop)
 	{
-		if(touchSensor.ready()) {
-			touchSensor.readI2C();
-			for(unsigned int i = 0; i < sizeof(touchSensor.rawData)/sizeof(int); i++) {
-    			printf("%5d ", touchSensor.rawData[i]);
-			}	
+		touchSensor.readI2C();
+		for(unsigned int i = 0; i < sizeof(touchSensor.rawData)/sizeof(int); i++) {
+			printf("%5d ", touchSensor.rawData[i]);
 		}
+		printf("\n");
 		usleep(50000);
 	}
 }

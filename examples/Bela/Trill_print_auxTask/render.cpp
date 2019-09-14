@@ -1,5 +1,5 @@
 #include <Bela.h>
-#include <Trill.h>
+#include <libraries/Trill/Trill.h>
 
 Trill touchSensor;
 
@@ -9,14 +9,11 @@ int readIntervalSamples = 0;
 
 void readTouchSensors(void*)
 {
-	if(touchSensor.ready()) {
-		touchSensor.readI2C();
-		for(unsigned int i = 0; i < sizeof(touchSensor.rawData)/sizeof(int); i++) {
-			printf("%5d ", touchSensor.rawData[i]);
-		}
-		printf("\n");
-		
+	touchSensor.readI2C();
+	for(unsigned int i = 0; i < sizeof(touchSensor.rawData)/sizeof(int); i++) {
+		printf("%5d ", touchSensor.rawData[i]);
 	}
+	printf("\n");
 }
 
 bool setup(BelaContext *context, void *userData)

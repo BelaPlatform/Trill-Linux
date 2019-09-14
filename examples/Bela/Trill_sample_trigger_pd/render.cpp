@@ -18,21 +18,17 @@ extern "C" {
 #include <sstream>
 #include <algorithm>
 // MODIFICATION START
-#include <Trill.h>
+#include <libraries/Trill/Trill.h>
 Trill touchSensor;
 // how often to try to read the
 // cap sensors inputs. The cap sensor values are always sent to Pd once
 // per block, regardless.
-unsigned int touchSensorSleepIntervalUs = 30000; 
+unsigned int touchSensorSleepIntervalUs = 5000;
 void readCapSensorLoop(void*)
 {
 	while(!gShouldStop)
 	{
-		if(touchSensor.ready()) {
-			touchSensor.readI2C();
-			//for(unsigned int i = 0; i < sizeof(touchSensor.rawData)/sizeof(int); i++)
-				//printf("%5d ", touchSensor.rawData[i]);
-		}
+		touchSensor.readI2C();
 		usleep(touchSensorSleepIntervalUs);
 	}
 }
