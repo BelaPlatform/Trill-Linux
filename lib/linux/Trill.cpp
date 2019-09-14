@@ -1,4 +1,6 @@
 #include <Trill.h>
+#include <string.h>
+#include <errno.h>
 
 Trill::Trill(){}
 
@@ -159,8 +161,8 @@ int Trill::readI2C() {
 	int bytesRead = read(i2C_file, dataBuffer, kRawLength);
 	if (bytesRead != kRawLength)
 	{
-		fprintf(stderr, "Failure to read Byte Stream\n");
-		return 1;
+		fprintf(stderr, "Failure to read Byte Stream: %s\n", strerror(errno));
+		return errno;
 	}
 	for (unsigned int i=0; i < numSensors; i++) {
 		rawData[i] = ((dataBuffer[2*i] << 8) + dataBuffer[2*i+1]) & 0x0FFF;
