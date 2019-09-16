@@ -4,7 +4,7 @@ Trill sensors bring beautiful touch interaction to digital projects. Trill is li
 
 [https://www.kickstarter.com/projects/423153472/trill-touch-sensing-for-makers](https://www.kickstarter.com/projects/423153472/trill-touch-sensing-for-makers)
 
-# Trill Libraries and Examples
+## Trill Libraries and Examples
 
 The repository holds the Bela, Linux and Arduino libraries for Trill and examples.
 
