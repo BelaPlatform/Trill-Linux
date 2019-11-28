@@ -1,4 +1,5 @@
 #include <I2c.h>
+#include <stdint.h>
 
 class Trill : public I2c
 {
@@ -32,6 +33,11 @@ class Trill : public I2c
 			kMaxTouchNum2D = 4
 		};
 
+		enum {
+			kNumSensorsBar = 26,
+			kNumSensors = 30
+		};
+
 		bool preparedForDataRead_ = false;
 		uint8_t device_type_; // Which type of device is connected (if any)
 		uint8_t firmware_version_; // Firmware version running on the device
@@ -42,8 +48,7 @@ class Trill : public I2c
 		uint16_t commandSleepTime = 10000;
 
 	public:
-		static unsigned int constexpr numSensors = 26;
-		int rawData[numSensors];
+		int rawData[kNumSensors];
 
 		enum Modes {
 			NORMAL = 0,
@@ -77,6 +82,11 @@ class Trill : public I2c
 		int firmwareVersion() { return firmware_version_; }
 		int getMode() { return mode_; }
 		int identify();
+		void printDetails() {
+			printf("Device type: %d\n", deviceType());
+			printf("Firmware version: %d\n", firmwareVersion());
+		};
+		int numSensors();
 
 		/* --- Scan configuration settings --- */
 		int setMode(uint8_t mode);

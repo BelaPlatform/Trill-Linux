@@ -10,7 +10,7 @@
 class Trill_centroid : public Trill {
 public:
 	Trill_centroid() : Trill(), numTouches_(0) {}
-	Trill_centroid(int i2c_bus, int i2c_address) : Trill(i2c_bus, i2c_address), numTouches_(0) {}
+	Trill_centroid(int i2c_bus, int i2c_address, int mode) : Trill(i2c_bus, i2c_address, mode), numTouches_(0) {}
 
 	// Override readI2C() method to update the touch locations
 	// calculated from raw values
