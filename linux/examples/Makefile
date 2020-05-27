@@ -4,7 +4,7 @@
 ##    make PROJECT=Trill_print
 ##
 
-LIB_DIR := ../../lib/linux
+LIB_DIR := ../lib/
 CPPFLAGS := -I$(LIB_DIR)
 
 CC := $(CXX) # ensure CXX is used for linking
