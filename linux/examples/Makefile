@@ -24,7 +24,7 @@ endif
 
 all: ## Build all examples or the one specified as PROJECT=
 all: $(ALL_PROJECTS_BINS)
-	for project in $(ALL_PROJECTS); do $(MAKE) --no-print-directory PROJECT=$$project; done
+	for project in $(ALL_PROJECTS); do $(MAKE) --no-print-directory PROJECT=$$project || exit 1; done
 
 clean: ## Clean al build files
 	rm -rf */*.o $(LIB_DIR)/*.o
