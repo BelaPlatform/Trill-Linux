@@ -1,2 +1,7 @@
+# the next three lines are to ignore files without extension (i.e.: binaries) in linux/examples/*/
+linux/examples/*/*
+!linux/examples/*/*.*
+!linux/examples/*/*/
+
 *.o
 .*.sw?
