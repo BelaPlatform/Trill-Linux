@@ -11,8 +11,7 @@ CC := $(CXX) # ensure CXX is used for linking
 
 LIB_SRCS = $(wildcard $(LIB_DIR)/*.cpp)
 LIB_OBJS := $(LIB_SRCS:.cpp=.o)
-ALL_PROJECTS := Trill_print Trill_settings_test
-ALL_PROJECT_BINS := $(foreach dir,$(ALL_PROJECTS),$(dir)/$(dir))
+ALL_PROJECTS := $(shell find * -maxdepth 1 -type d)
 
 PROJECT_BIN := $(PROJECT)/$(PROJECT)
 PROJECT_SRCS := $(wildcard $(PROJECT)/*.cpp)
@@ -23,7 +22,6 @@ $(PROJECT_BIN): $(PROJECT_OBJS) $(LIB_OBJS)
 endif
 
 all: ## Build all examples or the one specified as PROJECT=
-all: $(ALL_PROJECTS_BINS)
 	for project in $(ALL_PROJECTS); do $(MAKE) --no-print-directory PROJECT=$$project || exit 1; done
 
 clean: ## Clean al build files
