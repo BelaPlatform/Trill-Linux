@@ -16,44 +16,41 @@ void interrupt_handler(int var)
 
 int main()
 {
-	if(touchSensor.setup() != 0) {
+	if(touchSensor.setup(1, Trill::BAR) != 0) {
 		fprintf(stderr, "Unable to initialise touch sensor\n");
 		return false;
 	}
 
-	int newSpeed = speedOpts[0];
+	unsigned int newSpeed = speedOpts[0];
 	if(touchSensor.setScanSettings(newSpeed) == 0) {
 		fprintf(stderr, "Scan speed set to %d.\n", newSpeed);
 	} else {
 		return false;
 	}
 
-	int newPrescaler = prescalerOpts[0];
+	unsigned int newPrescaler = 3;
 	if(touchSensor.setPrescaler(newPrescaler) == 0) {
 		fprintf(stderr, "Prescaler set to %d.\n", newPrescaler);
 	} else {
 		return false;
 	}
 
-	int newThreshold= thresholdOpts[1];
+	float newThreshold = 0.01;
 	if(touchSensor.setNoiseThreshold(newThreshold) == 0) {
 		fprintf(stderr, "Threshold set to %d.\n", newThreshold);
 	} else {
 		return false;
 	}
 
-	if(touchSensor.updateBaseLine() != 0)
-		return false;
-
-	if(touchSensor.prepareForDataRead() != 0)
+	if(touchSensor.updateBaseline() != 0)
 		return false;
 
 	signal(SIGINT, interrupt_handler);
 	while(!gShouldStop)
 	{
 		touchSensor.readI2C();
-		for(unsigned int i = 0; i < sizeof(touchSensor.rawData)/sizeof(int); i++) {
-			printf("%5d ", touchSensor.rawData[i]);
+		for(unsigned int i = 0; i < touchSensor.rawData.size(); i++) {
+			printf("%.3f ", touchSensor.rawData[i]);
 		}	
 		printf("\n");
 		usleep(10000);

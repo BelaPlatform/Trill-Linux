@@ -13,11 +13,11 @@ Trill touchSensor;
 int main()
 {
 	signal(SIGINT, interrupt_handler);
-	touchSensor.setup();
+	touchSensor.setup(1, Trill::BAR);
 	while(!gShouldStop) {
 		touchSensor.readI2C();
-		for(unsigned int i = 0; i < sizeof(touchSensor.rawData)/sizeof(int); i++) {
-			printf("%5d ", touchSensor.rawData[i]);
+		for(unsigned int i = 0; i < touchSensor.rawData.size(); i++) {
+			printf("%.3 ", touchSensor.rawData[i]);
 		}
 		printf("\n");
 	}
