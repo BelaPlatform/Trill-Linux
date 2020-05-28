@@ -6,6 +6,8 @@
 
 LIB_DIR := ../lib/
 CPPFLAGS := -I$(LIB_DIR)
+CXXFLAGS := -g
+CFLAGS := $(CXXFLAGS)
 
 CC := $(CXX) # ensure CXX is used for linking
 
@@ -31,3 +33,7 @@ help: ## Show this help
 	@fgrep -h "##" $(MAKEFILE_LIST) | fgrep -v fgrep | sed -e 's/^\(.*\): .*##\(.*\)/\1:#\2/' | sed -e 's/^\(.*\)= .* -- \(.*\)/\1=#\2/' | sed 's/^##//' | awk -F"#" '{ printf "%-18s %-1s\n", $$1, $$2}'
 	@echo '(default: $(.DEFAULT_GOAL))'
 
+ifneq (,$(PROJECT))
+run: $(PROJECT_BIN)
+	./$(PROJECT_BIN) $(CL)
+endif
