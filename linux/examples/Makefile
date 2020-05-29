@@ -6,7 +6,7 @@
 
 LIB_DIR := ../lib/
 CPPFLAGS := -I$(LIB_DIR)
-CXXFLAGS := -g
+CXXFLAGS := -g -std=c++11 -Wno-psabi
 CFLAGS := $(CXXFLAGS)
 
 CC := $(CXX) # ensure CXX is used for linking
