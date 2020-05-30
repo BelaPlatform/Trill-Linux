@@ -33,6 +33,8 @@ const char* helpText =
 
 #include <signal.h>
 int gShouldStop = 0;
+unsigned int gLoopSleep = 20;
+
 void interrupt_handler(int var)
 {
 	gShouldStop = true;
@@ -41,7 +43,7 @@ void interrupt_handler(int var)
 typedef enum {
 	DONT,
 	ONCE,
-	YES,
+	ALWAYS,
 } ShouldRead;
 
 struct TrillDev {
@@ -53,9 +55,24 @@ std::map<std::string, struct TrillDev> gTouchSensors;
 oscpkt::UdpSocket gSock;
 
 int parseOsc(oscpkt::Message& msg);
-int sendOsc(const std::string& address, float* values, unsigned int size);
+int sendOscFloats(const std::string& address, float* values, unsigned int size);
+int sendOscTrillDev(const std::string& id, const TrillDev& trillDev);
+int sendOscReply(const std::string& command, const std::string& id, int ret);
 
-void createAllSensorsOnBus(unsigned int i2cBus) {
+int newTrillDev(const std::string& id, unsigned int i2cBus, Trill::Device device, uint8_t i2cAddr, ShouldRead shouldRead)
+{
+	gTouchSensors[id] = {std::unique_ptr<Trill>(new Trill(i2cBus, device, i2cAddr)), shouldRead};
+	if(Trill::NONE == gTouchSensors[id].t->deviceType()) {
+		gTouchSensors.erase(id);
+		return -1;
+	}
+	printf("Device id: %s\n", id.c_str());
+	gTouchSensors[id].t->printDetails();
+	sendOscTrillDev(id, gTouchSensors[id]);
+	return 0;
+}
+
+void createAllSensorsOnBus(unsigned int i2cBus, bool autoRead) {
 	printf("Trill devices detected on bus %d\n", i2cBus);
 	for(uint8_t addr = 0x20; addr <= 0x50; ++addr)
 	{
@@ -63,12 +80,10 @@ void createAllSensorsOnBus(unsigned int i2cBus) {
 		if(Trill::NONE != device)
 		{
 			std::string id = std::to_string(i2cBus) + "-" + Trill::getNameFromDevice(device) + "-" + std::to_string(addr);
-			gTouchSensors[id] = {std::unique_ptr<Trill>(new Trill(i2cBus, device, addr)), YES};
-			printf("Device id: %s\n", id.c_str());
-			gTouchSensors[id].t->printDetails();
+			ShouldRead shouldRead = autoRead ? ALWAYS : DONT;
+			newTrillDev(id, i2cBus, device, addr, shouldRead);
 		}
 	}
-	//TODO: sendInfo
 }
 
 int main(int argc, char** argv)
@@ -81,14 +96,14 @@ int main(int argc, char** argv)
 			return 0;
 		}
 		i2cBus = atoi(argv[1]);
-		createAllSensorsOnBus(i2cBus);
+		createAllSensorsOnBus(i2cBus, true);
 	}
 
 	signal(SIGINT, interrupt_handler);
 	gSock.connectTo("localhost", 7563);
 	gSock.bindTo(7562);
 
-	std::string baseAddress = "/trill/" + std::to_string(i2cBus);
+	std::string baseAddress = "/trill/";
 	std::string address;
 	while(!gShouldStop) {
 		for(auto& touchSensor : gTouchSensors) {
@@ -98,7 +113,7 @@ int main(int argc, char** argv)
 				touchSensor.second.shouldRead = ShouldRead::DONT;
 			Trill& t = *(touchSensor.second.t);
 			t.readI2C();
-			address = baseAddress + "/" + std::to_string(int(t.getAddress()));
+			address = baseAddress + "readings/" + touchSensor.first;
 			if(Trill::CENTROID == t.getMode()) {
 				float values[11];
 				unsigned int len = 0;
@@ -123,23 +138,38 @@ int main(int argc, char** argv)
 					len = 1 + numTouches * 2;
 				}
 				values[0] = numTouches;
-				sendOsc(address, values, len);
+				sendOscFloats(address, values, len);
 			} else {
 				address += "/diff";
-				sendOsc(address, t.rawData.data(), t.rawData.size());
+				sendOscFloats(address, t.rawData.data(), t.rawData.size());
 			}
 		}
 		// process incoming mesages
-		while(gSock.isOk() && gSock.receiveNextPacket(1)) {// timeout
+		while(!gShouldStop && gSock.isOk() && gSock.receiveNextPacket(1)) {// timeout
 			oscpkt::PacketReader pr(gSock.packetData(), gSock.packetSize());
 			oscpkt::Message *msg;
-			while (pr.isOk() && (msg = pr.popMessage()) != 0) {
+			while (!gShouldStop && pr.isOk() && (msg = pr.popMessage()) != 0) {
 				std::cout << "Received " << *msg << "\n";
 				parseOsc(*msg);
 			}
 
 		}
-		usleep(100000);
+		int sleep = gLoopSleep;
+		// sleep overall about gLoopSleep ms, but if it's too large, do it
+		// in smaller chunks to be reactive to incoming messages
+		int chunk = 10; // chunks of 10ms
+		int slept = 0;
+		while(!gShouldStop && sleep > 0) {
+			if(sleep >= chunk) {
+				sleep -= chunk;
+				slept += chunk;
+				usleep(chunk * 1000);
+			} else {
+				slept += sleep;
+				usleep(sleep * 1000);
+				sleep = 0;
+			}
+		}
 	}
 	return 0;
 }
@@ -158,6 +188,8 @@ std::vector<std::string> split(const std::string& s, char delimiter)
 	return tokens;
 }
 
+int sendOscList();
+
 int parseOsc(oscpkt::Message& msg)
 {
 	oscpkt::Message::ArgReader args = msg.partialMatch("/trill/command/");
@@ -172,31 +204,54 @@ int parseOsc(oscpkt::Message& msg)
 		return -1;
 	}
 	const std::string command = tokens.back();
+	printf("Command: %s\n", command.c_str());
 
 	// tmp variables for args parsing
 	float value0;
 	float value1;
 	std::string str0;
 
-	// global messages
-	if("list" == command) {
-		printf("list\n");
+	// global commands
+	if("listAll" == command && args.isOkNoMoreArgs()) {
+		printf("listAll\n");
+		sendOscList();
 		return 0;
-	} else if("createAll" == command && "f" == typeTags && args.popFloat(value0)) {
+	} else if("createAll" == command && "f" == typeTags && args.popFloat(value0).isOkNoMoreArgs())
+	{
 		printf("createAll %f\n", value0);
+		createAllSensorsOnBus(value0, false);
+		return 0;
+	} else if ("deleteAll" == command && args.isOkNoMoreArgs()) {
+		printf("deleteAll\n");
+		gTouchSensors.clear();
+		return 0;
+	} else if ("autoReadAll" == command && args.isOkNoMoreArgs()) {
+		printf("autoReadAll\n");
+		for(auto& t : gTouchSensors)
+			t.second.shouldRead = ALWAYS;
+		return 0;
+	} else if ("stopReadAll" == command && args.isOkNoMoreArgs()) {
+		printf("stopReadAll");
+		for(auto& t : gTouchSensors)
+			t.second.shouldRead = DONT;
+		return 0;
+	} else if ("loopSleep" == command && "f" == typeTags && args.popFloat(value0).isOkNoMoreArgs()) {
+		printf("loopSleep %f\n", value0);
+		gLoopSleep = value0;
 		return 0;
 	}
 
-	//instance messages: they all start with an id
+	//instance commands: they all start with an id
 	// check and retrieve first argument: id
 	if(typeTags[0] != 's') {
-		fprintf(stderr, "Unexpected first argument type: `%c` at %s\n", typeTags[0], msg.addressPattern().c_str());
+		std::cerr << "Unknown message or wrong argument list " << msg << "\n";
 		return -1;
 	}
 	std::string id;
 	args.popStr(id);
 	typeTags = typeTags.substr(1);// peel it off
 
+	// only "new" can use a non-existing id
 	if(gTouchSensors.find(id) == gTouchSensors.end() && "new" != command) {
 		fprintf(stderr, "Unknown id: %s at %s\n", id.c_str(), msg.addressPattern().c_str());
 		return -1;
@@ -222,45 +277,55 @@ int parseOsc(oscpkt::Message& msg)
 			}
 		}
 		if(ok) {
-			printf("new %f %s %f\n", bus, deviceName.c_str(), i2cAddr);
+			printf("new %s %f %s %f\n", id.c_str(), bus, deviceName.c_str(), i2cAddr);
+			newTrillDev(id, bus, Trill::getDeviceFromName(deviceName), i2cAddr, DONT);
 			return 0;
 		} else {
-			std::cerr << "Unknown message " << msg << "\n";
+			std::cerr << "Unknown message or wrong argument list " << msg << "\n";
 			return 1;
 		}
 	} else if ("delete" == command) {
+		gTouchSensors.erase(id);
 		printf("delete\n");
 		return 0;
 	}
 	// commands below need to access a device. If we get to this line, the
 	// device exists in gTouchSensors
 	Trill& t = *(gTouchSensors[id].t);
+	int ret;
 	printf("id: %s - ", id.c_str());
-	if ("autoScan" == command && "f" == typeTags && args.popFloat(value0).isOkNoMoreArgs()) {
-		printf("autoScan: %f\n", value0);
-	} // commands below simply map to the corresponding Trill class methods
-	else if("updateBaseline" == command && "" == typeTags) {
-		printf("UPDATEBASELINE\n");
+	if ("autoRead" == command && "f" == typeTags && args.popFloat(value0).isOkNoMoreArgs()) {
+		printf("autoRead: %f\n", value0);
+		gTouchSensors[id].shouldRead = value0 ? ALWAYS : DONT;
+	} else if ("readI2C" == command && args.isOkNoMoreArgs()) {
+		printf("readI2C\n");
+		gTouchSensors[id].shouldRead = ONCE;
+	} // commands below simply map to the corresponding methods of the Trill class
+	else if("updateBaseline" == command && args.isOkNoMoreArgs()) {
+		printf("updateBaseline\n");
+		ret = t.updateBaseline();
+		sendOscReply(command, id, ret);
 	} else if ("setPrescaler" == command && "f" == typeTags && args.popFloat(value0).isOkNoMoreArgs()) {
 		printf("setPrescaler %f\n", value0);
+		ret = t.setPrescaler(value0);
+		sendOscReply(command, id, ret);
 	} else if ("setNoiseThreshold" == command && "f" == typeTags && args.popFloat(value0).isOkNoMoreArgs()) {
 		printf("setNoiseThreshold %f\n", value0);
+		ret = t.setNoiseThreshold(value0);
+		sendOscReply(command, id, ret);
 	} else if ("setMode" == command && "s" == typeTags && args.popStr(str0).isOkNoMoreArgs()) {
 		printf("setMode: %s\n", str0.c_str());
+		ret = t.setMode(Trill::getModeFromName(str0));
+		sendOscReply(command, id, ret);
 	} else {
-		std::cerr << "Unknown message " << msg << "\n";
+		std::cerr << "Unknown message or wrong argument list " << msg << "\n";
 		return 1;
 	}
 	return 0;
 }
 
-int sendOsc(const std::string& address, float* values, unsigned int size)
+int sendOsc(const oscpkt::Message& msg)
 {
-	if(!size)
-		return 0;
-	oscpkt::Message msg(address);
-	for(unsigned int n = 0; n < size; ++n)
-		msg.pushFloat(values[n]);
 	oscpkt::PacketWriter pw;
 	pw.addMessage(msg);
 	bool ok = gSock.sendPacket(pw.packetData(), pw.packetSize());
@@ -269,4 +334,40 @@ int sendOsc(const std::string& address, float* values, unsigned int size)
 		return -1;
 	}
 	return 0;
+}
+
+int sendOscFloats(const std::string& address, float* values, unsigned int size)
+{
+	if(!size)
+		return 0;
+	oscpkt::Message msg(address);
+	for(unsigned int n = 0; n < size; ++n)
+		msg.pushFloat(values[n]);
+	return sendOsc(msg);
+}
+
+std::string commandReplyAddress = "/trill/commandreply/";
+int sendOscList()
+{
+	for(auto& d : gTouchSensors)
+		sendOscTrillDev(d.first, d.second);
+	return 0;
+}
+
+int sendOscTrillDev(const std::string& id, const TrillDev& trillDev)
+{
+	oscpkt::Message msg(commandReplyAddress);
+	msg.pushStr(id);
+	Trill& t = *trillDev.t;
+	msg.pushStr(Trill::getNameFromDevice(t.deviceType()));
+	msg.pushFloat(t.getAddress());
+	msg.pushStr(Trill::getNameFromMode(t.getMode()));
+	return sendOsc(msg);
+}
+
+int sendOscReply(const std::string& command, const std::string& id, int ret)
+{
+	oscpkt::Message msg(commandReplyAddress);
+	msg.pushStr(id);
+	return sendOsc(msg);
 }
