@@ -62,12 +62,16 @@ int sendOscReply(const std::string& command, const std::string& id, int ret);
 int newTrillDev(const std::string& id, unsigned int i2cBus, Trill::Device device, uint8_t i2cAddr, ShouldRead shouldRead)
 {
 	gTouchSensors[id] = {std::unique_ptr<Trill>(new Trill(i2cBus, device, i2cAddr)), shouldRead};
-	if(Trill::NONE == gTouchSensors[id].t->deviceType()) {
+	Trill& t = *gTouchSensors[id].t;
+	if(Trill::NONE == t.deviceType()) {
 		gTouchSensors.erase(id);
 		return -1;
 	}
+	// ensure the sensor scans continuously even though we read it only
+	// occasionally
+	t.setAutoScanInterval(1);
 	printf("Device id: %s\n", id.c_str());
-	gTouchSensors[id].t->printDetails();
+	t.printDetails();
 	sendOscTrillDev(id, gTouchSensors[id]);
 	return 0;
 }
