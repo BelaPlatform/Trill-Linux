@@ -14,6 +14,7 @@ int main()
 {
 	signal(SIGINT, interrupt_handler);
 	touchSensor.setup(1, Trill::BAR);
+	touchSensor.setMode(Trill::DIFF);
 	while(!gShouldStop) {
 		touchSensor.readI2C();
 		for(unsigned int i = 0; i < touchSensor.rawData.size(); i++) {
