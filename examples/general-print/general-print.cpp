@@ -1,5 +1,4 @@
 #include <Trill.h>
-#include <iostream>
 
 #include <signal.h>
 const char* helpText =
@@ -42,6 +41,8 @@ int main(int argc, char** argv)
 			deviceName = argv[c];
 		} else if(3 == c) {
 			address = std::stoi(argv[c]);
+			if(!address) // if failed, try again as hex
+				address = std::stoi(argv[c], 0, 16);
 		}
 	}
 	if(i2cBus < 0) {
@@ -53,18 +54,18 @@ int main(int argc, char** argv)
 		fprintf(stderr, "No or invalid device name specified: `%s`\n", deviceName.c_str());
 		return 1;
 	}
-	std::cout << "Opening device " << Trill::getNameFromDevice(device) << " on bus " << i2cBus;
+	printf("Opening device %s on bus %d ", Trill::getNameFromDevice(device).c_str(), i2cBus);
 	if(255 != address)
-		std::cout << "at address: " << address;
-	std::cout << "\n";
+		printf("at address: %#4x(%d)", address, address);
+	printf("\n");
 
-	signal(SIGINT, interrupt_handler);
-	if(touchSensor.setup(1, device, address))
+	if(touchSensor.setup(i2cBus, device, address))
 	{
 		fprintf(stderr, "Error while initialising device\n");
 		return 1;
 	}
 	touchSensor.printDetails();
+	signal(SIGINT, interrupt_handler);
 	while(!gShouldStop) {
 		touchSensor.readI2C();
 		// we print the sensor readings depending on the device mode,
