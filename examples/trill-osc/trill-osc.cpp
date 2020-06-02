@@ -8,15 +8,19 @@ http://bela.io
 */
 
 const char* helpText =
-"Read from a Trill device and send OSC messages"
-"  Usage: %s <bus>\n"
-"    <bus>: the bus to scan for devices (i.e.: /dev/i2c-<bus>).\n"
-"           If omitted, no device is automatically opened, but it can be\n"
-"           created via OSC with `new` or `createAll`.\n"
+"An OSC client to manage Trill devices."
+"  Usage: %s [--port <inPort>] [[--auto <bus> ] <remote>]\n"
+"  --port <inPort> :  set the port where to listen for OSC messages\n"
+"\n"
+"  `--auto <bus> <remote> : this is useful for debugging: automatically detect\n"
+"                          all the Trill devices on <bus> (corresponding to /dev/i2c-<bus>)\n"
+"                          and start reaading from them\n"
+"                          All messages read will be sent to the <remote> IP:port (default: %s)\n"
 "======================\n"
 "\n"
-"NOTE: as this program scans several addresses on the i2c bus\n"
-"it could cause non-Trill peripherals connected to it to malfunction.\n";
+"NOTE: when `--auto` is used, or a `createAll` command is received, the program\n"
+"scans several addresses on the i2c bus, which could cause non-Trill\n"
+"peripherals connected to it to malfunction.\n";
 
 
 #include <Trill.h>
@@ -58,6 +62,7 @@ int parseOsc(oscpkt::Message& msg);
 int sendOscFloats(const std::string& address, float* values, unsigned int size);
 int sendOscTrillDev(const std::string& id, const TrillDev& trillDev);
 int sendOscReply(const std::string& command, const std::string& id, int ret);
+std::vector<std::string> split(const std::string& s, char delimiter);
 
 int newTrillDev(const std::string& id, unsigned int i2cBus, Trill::Device device, uint8_t i2cAddr, ShouldRead shouldRead)
 {
@@ -76,14 +81,14 @@ int newTrillDev(const std::string& id, unsigned int i2cBus, Trill::Device device
 	return 0;
 }
 
-void createAllSensorsOnBus(unsigned int i2cBus, bool autoRead) {
+void createAllDevicesOnBus(unsigned int i2cBus, bool autoRead) {
 	printf("Trill devices detected on bus %d\n", i2cBus);
 	for(uint8_t addr = 0x20; addr <= 0x50; ++addr)
 	{
 		Trill::Device device = Trill::probe(i2cBus, addr);
 		if(Trill::NONE != device)
 		{
-			std::string id = std::to_string(i2cBus) + "-" + Trill::getNameFromDevice(device) + "-" + std::to_string(addr);
+			std::string id = std::to_string(i2cBus) + "-" + std::to_string(addr) + "-" + Trill::getNameFromDevice(device);
 			ShouldRead shouldRead = autoRead ? ALWAYS : DONT;
 			newTrillDev(id, i2cBus, device, addr, shouldRead);
 		}
@@ -92,20 +97,51 @@ void createAllSensorsOnBus(unsigned int i2cBus, bool autoRead) {
 
 int main(int argc, char** argv)
 {
-	unsigned int i2cBus = 1;
-	if(argc >= 2)
+	int i2cBus = -1;
+	unsigned int inPort = 7562;
+	std::string remote = "localhost:7563";
+
+	int c = 1;
+	while(c < argc)
 	{
-		if(std::string("--help") == std::string(argv[1])) {
-			printf(helpText, argv[0]);
+		if(std::string("--help") == std::string(argv[c])) {
+			printf(helpText, argv[0], remote.c_str());
 			return 0;
 		}
-		i2cBus = atoi(argv[1]);
-		createAllSensorsOnBus(i2cBus, true);
+		if(std::string("--port") == std::string(argv[c])) {
+			++c;
+			if(c < argc) {
+				inPort = atoi(argv[c]);
+				if(!inPort) {
+					fprintf(stderr, "Invalid port: %s\n", argv[c]);
+				}
+			}
+		}
+		if(std::string("--auto") == std::string(argv[c])) {
+			++c;
+			if(c < argc) {
+				i2cBus = atoi(argv[c]);
+				++c;
+			}
+			if(c < argc) {
+				remote = argv[c];
+				++c;
+			}
+			std::vector<std::string> spl = split(remote, ':');
+			if(2 != spl.size()) {
+				fprintf(stderr, "Wrong or unparseable `IP:port` argument: %s\n", remote.c_str());
+				return 1;
+			}
+			gSock.connectTo(spl[0], std::stoi(spl[1]));
+			std::cout << "Detecting all devices on bus " << i2cBus << ", sending to " << remote << "\n(remote address will be reset when the first inbound message is received)\n";
+			createAllDevicesOnBus(i2cBus, true);
+		}
+		++c;
 	}
+	std::cout << "Listening on port " << inPort << "\n";
 
 	signal(SIGINT, interrupt_handler);
-	gSock.connectTo("localhost", 7563);
-	gSock.bindTo(7562);
+	gSock.bindTo(inPort);
 
 	std::string baseAddress = "/trill/";
 	std::string address;
@@ -150,6 +186,19 @@ int main(int argc, char** argv)
 		}
 		// process incoming mesages
 		while(!gShouldStop && gSock.isOk() && gSock.receiveNextPacket(1)) {// timeout
+			static bool connected = false;
+			if(!connected) {
+				std::vector<std::string> origin = split(gSock.packetOrigin().asString(), ':');
+				if(origin.size() != 2) {
+					fprintf(stderr, "Something wrong with the address we received from\n");
+					continue;
+				}
+				std::cout << "Connecting to " << origin[0] << ":" << origin[1] << "\n";
+				gSock.connectTo(origin[0], origin[1]);
+				gSock.bindTo(inPort);
+				connected = true;
+			}
+
 			oscpkt::PacketReader pr(gSock.packetData(), gSock.packetSize());
 			oscpkt::Message *msg;
 			while (!gShouldStop && pr.isOk() && (msg = pr.popMessage()) != 0) {
@@ -223,7 +272,7 @@ int parseOsc(oscpkt::Message& msg)
 	} else if("createAll" == command && "f" == typeTags && args.popFloat(value0).isOkNoMoreArgs())
 	{
 		printf("createAll %f\n", value0);
-		createAllSensorsOnBus(value0, false);
+		createAllDevicesOnBus(value0, false);
 		return 0;
 	} else if ("deleteAll" == command && args.isOkNoMoreArgs()) {
 		printf("deleteAll\n");
