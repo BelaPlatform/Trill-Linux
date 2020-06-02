@@ -20,8 +20,62 @@ const char* helpText =
 "\n"
 "NOTE: when `--auto` is used, or a `createAll` command is received, the program\n"
 "scans several addresses on the i2c bus, which could cause non-Trill\n"
-"peripherals connected to it to malfunction.\n";
-
+"peripherals connected to it to malfunction.\n"
+"\n"
+"Command reference:\n"
+"Send commands to `/trill/commands/<command>`, with 0 or more arguments.\n"
+"\n"
+"Global commands:\n"
+"list all enabled devices:\n"
+"	/trill/commands/listAll\n"
+"discover and create all Trill devices on the specified `i2cBus`:\n"
+"	/trill/commands/createAll <float>i2cBus\n"
+"delete all active Trill devices:\n"
+"	/trill/commands/deleteAll\n"
+"set all devices to read (and send) new data automatically:\n"
+"	/trill/commands/autoReadAll\n"
+"disable automatic reading for all devices:\n"
+"	/trill/commands/stopReadAll\n"
+"change the scanning rate so that there is a `ms` sleep in between reads (and sends):\n"
+"	/trill/commands/loopSleep, ms\n"
+"\n"
+"Instance commands: they all start with a string id\n"
+"\n"
+"create Trill device on the specified I2C `busNumber`, of the specified\n"
+"`deviceType`, at the specified `i2cAddress` (optional).\n"
+"`deviceType` is a string representing the name of the device (e.g.: bar, square, etc).\n"
+"Use `deviceType = unknown` for accepting any type, but then you have to\n"
+"specify a valid value for `i2cAddress`.\n"
+"	/trill/commands/new, <string>id <float>i2cBus <string>deviceType <float>i2cAddress\n"
+"delete exising Trill device\n"
+"	/trill/commands/delete <string>id\n"
+"set device to read (and send) new data automatically (if `shouldDo`),\n"
+"or not (if 0 == shouldDo\n"
+"	/trill/commands/autoRead <string>id <float>shouldDo\n"
+"ask the device to read (and send) data once\n"
+"	/trill/commands/readI2C, <string>id\n"
+"\n"
+"More instance commands, which map directly to the C++ API http://docs.bela.io/classTrill.html\n"
+"	/trill/commands/updateBaseline <string>id\n"
+"	/trill/commands/setMode <string>id <string>mode // mode is a string: centroid, raw, baseline,  or diff\n"
+"	/trill/commands/setScanSettings <string>id <float>speed <float>num_bits\n"
+"	/trill/commands/setPrescaler <string>id <float>value\n"
+"	/trill/commands/setNoiseThreshold <string>id <float>value\n"
+"\n"
+"Outbound messages:\n"
+"messages in response to commands will be sent to:\n"
+"	/trill/commandreply\n"
+"\n"
+"Readings:\n"
+"1D devices in centroid mode:\n"
+"	/trill/readings/<id>/touches <num-touches> <loc0> <pos0> <loc1> <pos1> ...\n"
+"2D devices in centroid mode (compoundTouch):\n"
+"	/trill/readings/<id>/touchXY <num-touch> <loc0> <pos0>\n"
+"Devices in raw/baseline/diff mode:\n"
+"	/trill/readings/<id>/raw <numChannels> <c0> <c1> ...\n"
+"	/trill/readings/<id>/baseline <numChannels> <c0> <c1> ...\n"
+"	/trill/readings/<id>/diff <numChannels> <c0> <c1> ...\n"
+;
 
 #include <Trill.h>
 #include <vector>
@@ -357,6 +411,10 @@ int parseOsc(oscpkt::Message& msg)
 	else if("updateBaseline" == command && args.isOkNoMoreArgs()) {
 		printf("updateBaseline\n");
 		ret = t.updateBaseline();
+		sendOscReply(command, id, ret);
+	} else if ("setScanSettings" == command && "ff" == typeTags && args.popFloat(value0).popFloat(value1).isOkNoMoreArgs()) {
+		printf("setScanSettings %f %f\n", value0, value1);
+		ret = t.setScanSettings(value0, value1);
 		sendOscReply(command, id, ret);
 	} else if ("setPrescaler" == command && "f" == typeTags && args.popFloat(value0).isOkNoMoreArgs()) {
 		printf("setPrescaler %f\n", value0);

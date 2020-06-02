@@ -46,14 +46,14 @@ Global commands:
 list all enabled devices:
 	sendTrillCommand("listAll")
 discover and create all Trill devices on the specified `i2cBus`:
-	sendTrillCommand("createAll", i2cBus);
-delete all active Trill devices
-	sendTrillCommand("deleteAll");
-set all devices to read (and send) new data automatically
-	sendTrillCommand("autoReadAll);
-disable automatic reading for all devices
+	sendTrillCommand("createAll", i2cBus)
+delete all active Trill devices:
+	sendTrillCommand("deleteAll")
+set all devices to read (and send) new data automatically:
+	sendTrillCommand("autoReadAll)
+disable automatic reading for all devices:
 	sendTrillCommand("stopReadAll")
-change the scanning rate so that there is a `ms` sleep in between reads (and sends)
+change the scanning rate so that there is a `ms` sleep in between reads (and sends):
 	sendTrillCommand("loopSleep", ms)
 
 Instance commands: they all start with a string id
@@ -73,10 +73,10 @@ ask the device to read (and send) data once
 	sendTrillCommand("readI2C", id)
 
 More instance commands, which map directly to the C++ API http://docs.bela.io/classTrill.html
-	sendTrillCommand("updateBaseline", id);
-	sendTrillCommand("setPrescaler", id, value);
-	sendTrillCommand("setNoiseThreshold", id, value);
-	sendTrillCommand("setMode", id, mode); // mode is a string: "centroid", "raw", "baseline",  or "diff"
+	sendTrillCommand("updateBaseline", id)
+	sendTrillCommand("setPrescaler", id, value)
+	sendTrillCommand("setNoiseThreshold", id, value)
+	sendTrillCommand("setMode", id, mode) // mode is a string: "centroid", "raw", "baseline",  or "diff"
 
 Incoming messages will be at:
 /trill/commandreply << for replies to commands
