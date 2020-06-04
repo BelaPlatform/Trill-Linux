@@ -49,10 +49,8 @@ discover and create all Trill devices on the specified `i2cBus`:
 	sendTrillCommand("createAll", i2cBus)
 delete all active Trill devices:
 	sendTrillCommand("deleteAll")
-set all devices to read (and send) new data automatically:
-	sendTrillCommand("autoReadAll)
-disable automatic reading for all devices:
-	sendTrillCommand("stopReadAll")
+set whether all devices `should` read (and send) new data automatically or not:
+	sendTrillCommand("autoReadAll", should)
 change the scanning rate so that there is a `ms` sleep in between reads (and sends):
 	sendTrillCommand("loopSleep", ms)
 
@@ -66,9 +64,8 @@ specify a valid value for `i2cAddress`.
 	sendTrillCommand("new", id, i2cBus, deviceType, i2cAddress)
 delete exising Trill device
 	sendTrillCommand("delete", id)
-set device to read (and send) new data automatically (if `shouldDo`),
-or not (if 0 == shouldDo)
-	sendTrillCommand("autoRead", id, shouldDo)
+set whether device `should` read (and send) new data automatically (or not)
+	sendTrillCommand("autoRead", id, should)
 ask the device to read (and send) data once
 	sendTrillCommand("readI2C", id)
 

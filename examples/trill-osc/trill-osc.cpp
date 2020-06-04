@@ -32,10 +32,8 @@ const char* helpText =
 "	/trill/commands/createAll <float>i2cBus\n"
 "delete all active Trill devices:\n"
 "	/trill/commands/deleteAll\n"
-"set all devices to read (and send) new data automatically:\n"
-"	/trill/commands/autoReadAll\n"
-"disable automatic reading for all devices:\n"
-"	/trill/commands/stopReadAll\n"
+"set whether all devices `should` read (and send) new data automatically or not:\n"
+"	/trill/commands/autoReadAll <float>should \n"
 "change the scanning rate so that there is a `ms` sleep in between reads (and sends):\n"
 "	/trill/commands/loopSleep, ms\n"
 "\n"
@@ -49,9 +47,8 @@ const char* helpText =
 "	/trill/commands/new, <string>id <float>i2cBus <string>deviceType <float>i2cAddress\n"
 "delete exising Trill device\n"
 "	/trill/commands/delete <string>id\n"
-"set device to read (and send) new data automatically (if `shouldDo`),\n"
-"or not (if 0 == shouldDo\n"
-"	/trill/commands/autoRead <string>id <float>shouldDo\n"
+"set whether device `should` read (and send) new data automatically (or not)\n"
+"	/trill/commands/autoRead <string>id <float>should\n"
 "ask the device to read (and send) data once\n"
 "	/trill/commands/readI2C, <string>id\n"
 "\n"
@@ -91,6 +88,7 @@ const char* helpText =
 
 #include <signal.h>
 int gShouldStop = 0;
+bool gAutoReadAll = 0;
 unsigned int gLoopSleep = 20;
 
 void interrupt_handler(int var)
@@ -114,7 +112,7 @@ oscpkt::UdpSocket gSock;
 
 int parseOsc(oscpkt::Message& msg);
 int sendOscFloats(const std::string& address, float* values, unsigned int size);
-int sendOscTrillDev(const std::string& id, const TrillDev& trillDev);
+int sendOscTrillDev(const std::string& command, const std::string& id, const TrillDev& trillDev);
 int sendOscReply(const std::string& command, const std::string& id, int ret);
 std::vector<std::string> split(const std::string& s, char delimiter);
 
@@ -131,7 +129,7 @@ int newTrillDev(const std::string& id, unsigned int i2cBus, Trill::Device device
 	t.setAutoScanInterval(1);
 	printf("Device id: %s\n", id.c_str());
 	t.printDetails();
-	sendOscTrillDev(id, gTouchSensors[id]);
+	sendOscTrillDev("new", id, gTouchSensors[id]);
 	return 0;
 }
 
@@ -188,7 +186,8 @@ int main(int argc, char** argv)
 			}
 			gSock.connectTo(spl[0], std::stoi(spl[1]));
 			std::cout << "Detecting all devices on bus " << i2cBus << ", sending to " << remote << "\n(remote address will be reset when the first inbound message is received)\n";
-			createAllDevicesOnBus(i2cBus, true);
+			gAutoReadAll = true;
+			createAllDevicesOnBus(i2cBus, gAutoReadAll);
 		}
 		++c;
 	}
@@ -326,21 +325,17 @@ int parseOsc(oscpkt::Message& msg)
 	} else if("createAll" == command && "f" == typeTags && args.popFloat(value0).isOkNoMoreArgs())
 	{
 		printf("createAll %f\n", value0);
-		createAllDevicesOnBus(value0, false);
+		createAllDevicesOnBus(value0, gAutoReadAll);
 		return 0;
 	} else if ("deleteAll" == command && args.isOkNoMoreArgs()) {
 		printf("deleteAll\n");
 		gTouchSensors.clear();
 		return 0;
-	} else if ("autoReadAll" == command && args.isOkNoMoreArgs()) {
-		printf("autoReadAll\n");
+	} else if ("autoReadAll" == command && "f" == typeTags && args.popFloat(value0).isOkNoMoreArgs()) {
+		printf("autoReadAll %f\n", value0);
+		gAutoReadAll = value0;
 		for(auto& t : gTouchSensors)
-			t.second.shouldRead = ALWAYS;
-		return 0;
-	} else if ("stopReadAll" == command && args.isOkNoMoreArgs()) {
-		printf("stopReadAll");
-		for(auto& t : gTouchSensors)
-			t.second.shouldRead = DONT;
+			t.second.shouldRead = gAutoReadAll ? ALWAYS : DONT;
 		return 0;
 	} else if ("loopSleep" == command && "f" == typeTags && args.popFloat(value0).isOkNoMoreArgs()) {
 		printf("loopSleep %f\n", value0);
@@ -385,7 +380,7 @@ int parseOsc(oscpkt::Message& msg)
 		}
 		if(ok) {
 			printf("new %s %f %s %f\n", id.c_str(), bus, deviceName.c_str(), i2cAddr);
-			newTrillDev(id, bus, Trill::getDeviceFromName(deviceName), i2cAddr, DONT);
+			newTrillDev(id, bus, Trill::getDeviceFromName(deviceName), i2cAddr, gAutoReadAll ? ALWAYS : DONT);
 			return 0;
 		} else {
 			std::cerr << "Unknown message or wrong argument list " << msg << "\n";
@@ -461,13 +456,13 @@ std::string commandReplyAddress = "/trill/commandreply/";
 int sendOscList()
 {
 	for(auto& d : gTouchSensors)
-		sendOscTrillDev(d.first, d.second);
+		sendOscTrillDev("list", d.first, d.second);
 	return 0;
 }
 
-int sendOscTrillDev(const std::string& id, const TrillDev& trillDev)
+int sendOscTrillDev(const std::string& command, const std::string& id, const TrillDev& trillDev)
 {
-	oscpkt::Message msg(commandReplyAddress);
+	oscpkt::Message msg(commandReplyAddress + "/" + command);
 	msg.pushStr(id);
 	Trill& t = *trillDev.t;
 	msg.pushStr(Trill::getNameFromDevice(t.deviceType()));
@@ -478,7 +473,8 @@ int sendOscTrillDev(const std::string& id, const TrillDev& trillDev)
 
 int sendOscReply(const std::string& command, const std::string& id, int ret)
 {
-	oscpkt::Message msg(commandReplyAddress);
+	oscpkt::Message msg(commandReplyAddress + command);
 	msg.pushStr(id);
+	msg.pushFloat(ret);
 	return sendOsc(msg);
 }
