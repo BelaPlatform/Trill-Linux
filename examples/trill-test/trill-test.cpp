@@ -3,17 +3,17 @@
 #include <signal.h>
 #include <vector>
 
-#define DIFF_THRESHOLD 200
-
 const char* helpText =
 "Connect to one Trill device and print its readings to the console\n"
-"  Usage: %s <bus> <device-name> [<address>]\n"
+"  Usage: %s <bus> <device-name> [[[[<address>] <threshold>] <prescaler>] <num-pads>]\n"
 "         <bus> is the bus that the device is connected to (i.e.: the X in /dev/i2c-X)\n"
 "         <device-name> is the name of the device (e.g.: `bar`, `square`,\n"
 "	                `craft`, `hex`, ring`, ...)\n"
 "          <address> (optional) is the address of the device. If this is\n"
 "                    not passed, the default address for the specified device\n"
 "                    type will be used instead.\n"
+"          <threshold> (optional) the threshold at which a pad is considered `OK`\n"
+"          <prescaler> (optional) the device prescaler\n"
 "          <num-pads> (optional) is the number of pads to test. If this is\n"
 "                    not passed, the default number of pads for the specified\n"
 "                    device type will be used insted.\n"
@@ -34,6 +34,8 @@ int main(int argc, char** argv)
 	int i2cBus = -1;
 	uint8_t address = 255;
 	int numPads = -1; // Number of pads
+	float threshold = 0.1;
+	int prescaler = -1;
 	if(2 > argc) {
 		printf(helpText, argv[0]);
 		return 1;
@@ -53,9 +55,20 @@ int main(int argc, char** argv)
 			if(!address) // if failed, try again as hex
 				address = std::stoi(argv[c], 0, 16);
 		} else if(4 == c) {
+			threshold = std::stof(argv[c]);
+		} else if(5 == c) {
+			prescaler = std::stoi(argv[c]);
+		} else if(6 == c) {
 			numPads = std::stoi(argv[c]);
 		}
 	}
+	printf("Settings:\n");
+	printf("i2cBus: %d\n", i2cBus);
+	printf("deviceName: %s\n", deviceName.c_str());
+	printf("address: %#x\n", address);
+	printf("threshold: %.3f\n", threshold);
+	printf("prescaler: %d\n", prescaler);
+	printf("numPads: %d\n", numPads);
 	if(i2cBus < 0) {
 		fprintf(stderr, "No or invalid bus specified\n");
 		return 1;
@@ -81,6 +94,14 @@ int main(int argc, char** argv)
 		fprintf(stderr, "Couldn't set device in differential mode\n");
 		return 1;
 	}
+	if(-1 != prescaler)
+	{
+		if(touchSensor.setPrescaler(prescaler))
+		{
+			fprintf(stderr, "Couldn't set device prescaler to %d\n", prescaler);
+			return 1;
+		}
+	}
 
 	// Get num channels
 	int nChannels = touchSensor.getNumChannels();
@@ -100,7 +121,11 @@ int main(int argc, char** argv)
 	signal(SIGINT, interrupt_handler);
 
 	while(!gShouldStop) {
-		touchSensor.readI2C();
+		int ret = touchSensor.readI2C();
+		if(ret) {
+			fprintf(stderr, "Reading failed. Check your connections\n");
+			return 1;
+		}
 
 		bool testPassed = true;
 
@@ -114,14 +139,14 @@ int main(int argc, char** argv)
 					diffRange[i] = reading;
 
 				// Check if pad passes test
-				bool padPassed = ( diffRange[i] > (float)(DIFF_THRESHOLD * 0.001) );
+				bool padPassed = ( diffRange[i] > threshold );
 
 				testPassed = testPassed && padPassed;
 
 				if(padPassed)
-					printf("OK\t");
+					printf("%4s ", "OK");
 				else
-					printf("%1.3f\t", reading);
+					printf("%4.2f ", reading);
 			}
 		}
 		printf("\n");
@@ -129,10 +154,10 @@ int main(int argc, char** argv)
 		if(testPassed)
 		{
 			fprintf(stdout, "The sensor has passed the test, all %d pads seem to be working.\n", numPads);
-			gShouldStop = true;
+			return 0;
 		}
 
 		usleep(100000);
 	}
-	return 0;
+	return 2;
 }
