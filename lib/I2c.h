@@ -27,10 +27,13 @@ protected:
 	int i2C_bus;
 	int i2C_address;
 	int i2C_file;
+	ssize_t readBytes(void* buf, size_t count);
+	ssize_t writeBytes(const void* buf, size_t count);
 
 public:
+	I2c(){};
+	I2c(I2c&&) = delete;
 	int initI2C_RW(int bus, int address, int file);
-	virtual int readI2C() = 0;
 	int closeI2C();
 
 	virtual ~I2c();
@@ -67,13 +70,23 @@ inline int I2c::initI2C_RW(int bus, int address, int fileHnd)
 
 inline int I2c::closeI2C()
 {
-	if(close(i2C_file)>0)
-	{
-		fprintf(stderr, "Failed to close  file %d\n", i2C_file);
-		return 1;
+	if(i2C_file > 0) {
+		if(close(i2C_file) > 0)
+			return 1;
+		else
+			i2C_file = -1;
 	}
 	return 0;
 }
 
+inline ssize_t I2c::readBytes(void *buf, size_t count)
+{
+	return read(i2C_file, buf, count);
+}
+
+inline ssize_t I2c::writeBytes(const void *buf, size_t count)
+{
+	return write(i2C_file, buf, count);
+}
 
 inline I2c::~I2c(){}
