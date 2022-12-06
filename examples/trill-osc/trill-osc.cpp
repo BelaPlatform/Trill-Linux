@@ -147,6 +147,7 @@ void createAllDevicesOnBus(unsigned int i2cBus, bool autoRead) {
 	}
 }
 
+static std::string baseAddress = "/trill/";
 int main(int argc, char** argv)
 {
 	int i2cBus = -1;
@@ -196,7 +197,6 @@ int main(int argc, char** argv)
 	signal(SIGINT, interrupt_handler);
 	gSock.bindTo(inPort);
 
-	std::string baseAddress = "/trill/";
 	std::string address;
 	while(!gShouldStop) {
 		for(auto& touchSensor : gTouchSensors) {
@@ -298,7 +298,7 @@ int sendOscList();
 
 int parseOsc(oscpkt::Message& msg)
 {
-	oscpkt::Message::ArgReader args = msg.partialMatch("/trill/command/");
+	oscpkt::Message::ArgReader args = msg.partialMatch(baseAddress + "command/");
 	if(!args.isOk()) {
 		return -1;
 	}
@@ -452,7 +452,7 @@ int sendOscFloats(const std::string& address, float* values, unsigned int size)
 	return sendOsc(msg);
 }
 
-std::string commandReplyAddress = "/trill/commandreply/";
+std::string commandReplyAddress = baseAddress + "commandreply/";
 int sendOscList()
 {
 	for(auto& d : gTouchSensors)
