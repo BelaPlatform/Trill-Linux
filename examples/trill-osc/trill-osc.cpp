@@ -87,13 +87,13 @@ const char* helpText =
 #include "udp.hh"
 
 #include <signal.h>
-int gShouldStop = 0;
+int shouldStop = 0;
 bool gAutoReadAll = 0;
 unsigned int gLoopSleep = 20;
 
 void interrupt_handler(int var)
 {
-	gShouldStop = true;
+	shouldStop = true;
 }
 
 typedef enum {
@@ -198,7 +198,7 @@ int main(int argc, char** argv)
 	gSock.bindTo(inPort);
 
 	std::string address;
-	while(!gShouldStop) {
+	while(!shouldStop) {
 		for(auto& touchSensor : gTouchSensors) {
 			if(ShouldRead::DONT == touchSensor.second.shouldRead)
 				continue;
@@ -238,7 +238,7 @@ int main(int argc, char** argv)
 			}
 		}
 		// process incoming mesages
-		while(!gShouldStop && gSock.isOk() && gSock.receiveNextPacket(1)) {// timeout
+		while(!shouldStop && gSock.isOk() && gSock.receiveNextPacket(1)) {// timeout
 			static bool connected = false;
 			if(!connected) {
 				std::vector<std::string> origin = split(gSock.packetOrigin().asString(), ':');
@@ -254,7 +254,7 @@ int main(int argc, char** argv)
 
 			oscpkt::PacketReader pr(gSock.packetData(), gSock.packetSize());
 			oscpkt::Message *msg;
-			while (!gShouldStop && pr.isOk() && (msg = pr.popMessage()) != 0) {
+			while (!shouldStop && pr.isOk() && (msg = pr.popMessage()) != 0) {
 				std::cout << "Received " << *msg << "\n";
 				parseOsc(*msg);
 			}
@@ -265,7 +265,7 @@ int main(int argc, char** argv)
 		// in smaller chunks to be reactive to incoming messages
 		int chunk = 10; // chunks of 10ms
 		int slept = 0;
-		while(!gShouldStop && sleep > 0) {
+		while(!shouldStop && sleep > 0) {
 			if(sleep >= chunk) {
 				sleep -= chunk;
 				slept += chunk;
